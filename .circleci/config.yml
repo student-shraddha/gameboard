@@ -3,11 +3,10 @@ version: 2.1
 jobs:
   deploy:
     docker:
-      - image: cimg/openjdk:17.0  # Java 17, update if you use a different version
+      - image: cimg/openjdk:17.0  # Java 17, update if needed
     steps:
       - checkout
 
-      # Standard Maven lifecycle commands
       - run:
           name: Clean Project
           command: mvn clean
@@ -24,30 +23,34 @@ jobs:
           name: Package App
           command: mvn package
 
-      # Create and send the JAR to EC2
       - run:
           name: Deploy to EC2
           command: |
+            # Create deployment package
             mkdir -p output
             cp target/*.jar output/app.jar
             tar -czf output/deploy.tar.gz -C output app.jar
 
+            # Make sure remote folder exists BEFORE scp (important fix!)
+            ssh -o StrictHostKeyChecking=no ubuntu@35.183.24.169 "mkdir -p ~/app && chmod 755 ~/app"
+
+            # Upload package
             scp -o StrictHostKeyChecking=no output/deploy.tar.gz ubuntu@35.183.24.169:~/app
 
+            # SSH into EC2 and run deployment script
             ssh -o StrictHostKeyChecking=no ubuntu@35.183.24.169 "
               set -e
               sudo apt update &&
               sudo apt install -y openjdk-17-jdk &&
-              mkdir -p ~/app &&
               cd ~/app &&
               tar -xzf deploy.tar.gz &&
               rm deploy.tar.gz &&
 
-              # Kill any old app running on port 8080
+              # Kill old app on port 8080 (optional)
               PID=\$(lsof -t -i:8080 || true) &&
               if [ -n \"\$PID\" ]; then kill -9 \$PID; fi &&
 
-              # Run new JAR in background
+              # Run new app
               nohup java -jar app.jar > app.log 2>&1 &
             "
 
@@ -55,3 +58,4 @@ workflows:
   deploy_flow:
     jobs:
       - deploy
+
