@@ -32,7 +32,8 @@ jobs:
             tar -czf output/deploy.tar.gz -C output app.jar
 
             # Make sure remote folder exists BEFORE scp (important fix!)
-            ssh -o StrictHostKeyChecking=no ubuntu@35.183.24.169 "mkdir -p ~/app && chmod 755 ~/app"
+            ssh -o StrictHostKeyChecking=no ubuntu@35.183.24.169 "sudo mkdir -p ~/app && sudo chown ubuntu:ubuntu ~/app"
+
 
             # Upload package
             scp -o StrictHostKeyChecking=no output/deploy.tar.gz ubuntu@35.183.24.169:~/app
