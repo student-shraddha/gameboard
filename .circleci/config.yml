@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   deploy:
     docker:
-      - image: cimg/openjdk:17.0  # Java 17, update if needed
+      - image: cimg/openjdk:17.0
     steps:
       - checkout
 
@@ -26,19 +26,18 @@ jobs:
       - run:
           name: Deploy to EC2
           command: |
-            # Create deployment package
+            # Package app
             mkdir -p output
             cp target/*.jar output/app.jar
             tar -czf output/deploy.tar.gz -C output app.jar
 
-            # Make sure remote folder exists BEFORE scp (important fix!)
+            # Ensure target directory exists and is writable
             ssh -o StrictHostKeyChecking=no ubuntu@35.183.24.169 "sudo mkdir -p ~/app && sudo chown ubuntu:ubuntu ~/app"
 
-
-            # Upload package
+            # Upload deploy package
             scp -o StrictHostKeyChecking=no output/deploy.tar.gz ubuntu@35.183.24.169:~/app
 
-            # SSH into EC2 and run deployment script
+            # SSH into EC2 and deploy
             ssh -o StrictHostKeyChecking=no ubuntu@35.183.24.169 "
               set -e
               sudo apt update &&
@@ -47,16 +46,23 @@ jobs:
               tar -xzf deploy.tar.gz &&
               rm deploy.tar.gz &&
 
-              # Kill old app on port 8080 (optional)
+              # Stop old app (if any)
               PID=\$(lsof -t -i:8080 || true) &&
               if [ -n \"\$PID\" ]; then kill -9 \$PID; fi &&
 
-              # Run new app
+              # Start app in background
               nohup java -jar app.jar > app.log 2>&1 &
+
+              # Wait a few seconds to ensure it starts
+              sleep 5
+
+              # Stream logs for 60 seconds to keep CircleCI from timing out
+              tail -n 50 app.log | timeout 60 cat
             "
 
 workflows:
   deploy_flow:
     jobs:
       - deploy
+
 
