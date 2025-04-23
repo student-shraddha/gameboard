@@ -1,0 +1,47 @@
+version: 2.1
+
+jobs:
+  deploy:
+    docker:
+      - image: cimg/openjdk:17.0  # You can change this to your preferred Java version
+    steps:
+      - checkout
+
+      # Build your Java app (Maven)
+      - run:
+          name: Build Java App
+          command: mvn clean package -DskipTests
+
+      # Create and send the deployment package to EC2
+      - run:
+          name: Deploy to EC2
+          command: |
+            mkdir -p output
+            cp target/*.jar output/app.jar
+            tar -czf output/deploy.tar.gz -C output app.jar
+
+            scp -o StrictHostKeyChecking=no output/deploy.tar.gz ubuntu@35.183.24.169:~/app
+
+            ssh -o StrictHostKeyChecking=no ubuntu@35.183.24.169 << 'EOF'
+              set -e
+              sudo apt update
+              sudo apt install -y openjdk-17-jdk
+              mkdir -p ~/app
+              cd ~/app
+              tar -xzf deploy.tar.gz
+              rm deploy.tar.gz
+
+              # Kill any old instance running on port 8080 (optional safety)
+              PID=$(lsof -t -i:8080 || true)
+              if [ -n "$PID" ]; then
+                kill -9 $PID
+              fi
+
+              # Run new instance in background
+              nohup java -jar app.jar > app.log 2>&1 &
+            EOF
+
+workflows:
+  deploy_flow:
+    jobs:
+      - deploy
