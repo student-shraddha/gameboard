@@ -78,8 +78,8 @@
         msg: "No JAR file found in {{ app_dir }}/target. Maven build may have failed or project may not produce a JAR."
 
     - name: Stop existing Java app if running
-      shell: |
-        pkill -f 'java -jar' || true
+      shell: pkill -f 'java -jar' || true
+      ignore_errors: yes
 
     - name: Start Java app
       shell: |
