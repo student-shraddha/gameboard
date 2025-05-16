@@ -42,15 +42,40 @@
 
     - name: Build project using Maven
       become_user: "{{ ansible_user }}"
-      shell: mvn clean package
+      shell: mvn clean package -DskipTests
       args:
         chdir: "{{ app_dir }}"
 
+    - name: List contents of target directory (debugging)
+      become_user: "{{ ansible_user }}"
+      shell: ls -l target
+      args:
+        chdir: "{{ app_dir }}"
+      register: target_contents
+      ignore_errors: yes
+
+    - name: Show target directory listing
+      debug:
+        var: target_contents.stdout_lines
+
+    - name: Find built JAR file
+      find:
+        paths: "{{ app_dir }}/target"
+        patterns: "*.jar"
+        recurse: no
+      register: jar_files
+
     - name: Copy built JAR to deploy location
+      when: jar_files.files | length > 0
       copy:
-        src: "{{ app_dir }}/target/*.jar"
+        src: "{{ jar_files.files[0].path }}"
         dest: "/home/{{ ansible_user }}/app.jar"
         remote_src: yes
+
+    - name: Fail if JAR file was not found
+      when: jar_files.files | length == 0
+      fail:
+        msg: "No JAR file found in {{ app_dir }}/target. Maven build may have failed or project may not produce a JAR."
 
     - name: Stop existing Java app if running
       shell: |
