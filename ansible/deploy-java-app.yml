@@ -1,0 +1,63 @@
+- name: CI/CD pipeline for Java Maven Project
+  hosts: webservers
+  become: yes
+
+  vars:
+    ansible_user: ubuntu
+    app_dir: /home/{{ ansible_user }}/gameboard
+    repo_url: https://{{ lookup('env', 'GITHUB_PAT') }}@github.com/student-shraddha/gameboard.git
+
+  tasks:
+    - name: Update APT cache
+      apt:
+        update_cache: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - git
+          - openjdk-17-jdk
+          - maven
+        state: present
+
+    - name: Set JAVA_HOME environment variable
+      lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64'
+        create: yes
+
+    - name: Reload environment variables
+      shell: source /etc/environment
+
+    - name: Remove existing app directory
+      file:
+        path: "{{ app_dir }}"
+        state: absent
+
+    - name: Clone Java Maven repo
+      become_user: "{{ ansible_user }}"
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: master
+        force: yes
+
+    - name: Build project using Maven
+      become_user: "{{ ansible_user }}"
+      shell: mvn clean package
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Copy built JAR to deploy location
+      copy:
+        src: "{{ app_dir }}/target/*.jar"
+        dest: "/home/{{ ansible_user }}/app.jar"
+        remote_src: yes
+
+    - name: Stop existing Java app if running
+      shell: |
+        pkill -f 'java -jar' || true
+
+    - name: Start Java app
+      shell: |
+        nohup java -jar /home/{{ ansible_user }}/app.jar > /home/{{ ansible_user }}/app.log 2>&1 &
