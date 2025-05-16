@@ -5,7 +5,7 @@
   vars:
     ansible_user: ubuntu
     app_dir: /home/{{ ansible_user }}/gameboard
-    repo_url: https://{{ lookup('GITHUB_PAT') }}@github.com/student-shraddha/gameboard.git
+    repo_url: https://github.com/student-shraddha/gameboard.git
 
   tasks:
     - name: Update APT cache
@@ -20,14 +20,12 @@
           - maven
         state: present
 
-    - name: Set JAVA_HOME environment variable
+    - name: Ensure JAVA_HOME is set in /etc/environment
       lineinfile:
         path: /etc/environment
         line: 'JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64'
         create: yes
-
-    - name: Reload environment variables
-      shell: source /etc/environment
+        state: present
 
     - name: Remove existing app directory
       file:
